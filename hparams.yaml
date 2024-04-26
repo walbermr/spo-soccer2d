@@ -1,0 +1,13 @@
+feature_set_function: &id001 fset_1
+evaluator: 
+    act_fn: sigmoid
+    norm_layer: None
+generator:
+    output_size: 2
+    use_bps: True
+    bps_ckpt_path: ./models/bps_model_small.ckpt
+    evaluator_lambda: 1.0
+dataset:
+    normalize_dset: True
+    normalize_evaluation: False
+    fset: *id001
