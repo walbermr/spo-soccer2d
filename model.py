@@ -45,26 +45,33 @@ class TargetPointGenerator(nn.Module):
     net : nn.Sequential
         MLP model.
     '''
-    def __init__(self, input_size, output_size, use_bps=True, bps_ckpt_path="./models/bps_model.ckpt") -> None:
+    def __init__(self, input_size, output_size, bps_ckpt_path="./models/bps_model.ckpt") -> None:
         super().__init__()
-        self.use_bps = use_bps
         self.constants = Constants("cuda:0")
 
-        if self.use_bps:
-            self.bps_model = CyrusPassClassifier.load_from_checkpoint(
-                bps_ckpt_path,
-                strict=False,
-            )
-            self.bps_model.freeze()
+        self.bps_model = CyrusPassClassifier.load_from_checkpoint(
+            bps_ckpt_path,
+            strict=False,
+        )
+        self.bps_model.freeze()
 
         self.net = nn.Sequential(
-            nn.Linear(input_size, 64),
+            nn.Linear(input_size, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(),
+            nn.Linear(1024, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Linear(256, 64),
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Linear(64, 32),
             nn.BatchNorm1d(32),
             nn.ReLU(),
-            nn.Linear(32, 2),
+            nn.Linear(32, output_size),
             nn.Tanh(),
         )
 
@@ -97,16 +104,11 @@ class TargetPointGenerator(nn.Module):
                 Tensor containing the labeled result.
         '''
 
-        bps_pos = 0
-        bps_idx = None
-
-        if self.use_bps:
-            bps_idx = torch.argmax(self.bps_model(bps_input), axis=1)
+        bps_idx = torch.argmax(self.bps_model(bps_input), axis=1)
 
         generator_input, bps_pos = self.get_generator_input(x, raw_wm, bps_idx)
 
         delta = self.net(generator_input)
-        # delta = torch.clip(delta, -1, 1)
         target_point = (bps_pos + delta).float()
         if return_bps:
             return target_point, bps_pos
@@ -200,13 +202,11 @@ class SPO(pl.LightningModule):
 
         self.save_hyperparameters()
 
-        if not self.hparams.only_evaluator:
-            self.generator = TargetPointGenerator(
-                hparams["generator"]["input_size"], 
-                hparams["generator"]["output_size"], 
-                hparams["generator"]["use_bps"],
-                hparams["generator"]["bps_ckpt_path"],
-            )
+        self.generator = TargetPointGenerator(
+            hparams["generator"]["input_size"], 
+            hparams["generator"]["output_size"], 
+            hparams["generator"]["bps_ckpt_path"],
+        )
 
         self.evaluator = PassEvaluator(
             hparams["evaluator"]["input_size"], 
@@ -214,7 +214,6 @@ class SPO(pl.LightningModule):
             norm_layer=self.hparams.norm_layer,
         )
 
-        # self.evaluator_loss = nn.HuberLoss(delta=10.0)
         self.get_feature_set = fset_dict[self.feature_set_function]
         self.evaluator_loss = nn.MSELoss()
         self.evaluator_val_loss = nn.MSELoss()
@@ -222,18 +221,7 @@ class SPO(pl.LightningModule):
         self.constants = Constants("cuda:0")
   
     def get_evaluator_input(self, generated_action, wm):
-        if self.hparams.conditional_gan:
-            evaluator_input = torch.cat(
-                [
-                    generated_action,
-                    wm
-                ], 
-                dim=1,
-            )
-        else:
-            evaluator_input = wm
-
-        return evaluator_input
+        return wm
     
     def _risk_evaluator_train_step(self, optimizer_idx, wm, true_action, action_eval, action_risk):
         evaluator_input = self.get_evaluator_input(true_action, wm)

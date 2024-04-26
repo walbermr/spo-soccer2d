@@ -1,4 +1,7 @@
-# SPO
+![](assets/rc199.svg)
+---
+<h1 style="text-align: center;">RobôCIn2D - SPO</h1>
+
 
 Single Pass Optimization genearting MLP model for single-step target point generation for passing in Soccer Simulation 2D.
 
@@ -28,7 +31,7 @@ To configure the model, modify the `hparams.yaml` file.
 
 ### Train
 
-Note: to reduce training time, the training is not memory-optimized. Thus, a system with higher memory mnay be required.
+Note: to reduce training time, the training is not memory-optimized. Thus, a system with higher memory may be required.
 
 
 ```

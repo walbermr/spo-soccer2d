@@ -16,8 +16,6 @@ from feature_sets import *
 
 from sklearn.preprocessing import normalize
 
-from ordered_set import OrderedSet
-
 from params import set_input_size
 
 
@@ -63,16 +61,12 @@ class DataModule(pl.LightningDataModule):
             self, 
             feature_set="fset1", 
             normalize_dset=False,
-            normalize_evaluation=False,
-            oversampling_method=None,
-            fix_cluster_anomaly=None,
+            normalize_evaluation=False,            
             batch_size=100, 
             eval_batch_size=100, 
-            cluster_size=3,
             num_workers=4, 
             dataset_path="./db/pass-generator-dataset",
             dataset_nader_path="./db/cyrus-dataset",
-            stratify=False,
             debug=False,
         ) -> None:
         super().__init__()
@@ -82,13 +76,9 @@ class DataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.eval_batch_size = eval_batch_size
         self.normalize_evaluation = normalize_evaluation
-        self.fix_cluster_anomaly = fix_cluster_anomaly
-        self.anomaly_margin = 1.0
         action_dfs = []
         wm_dfs = []
-        self.stratify = stratify
         self.feature_set = feature_set
-        self.cluster_size = cluster_size
         self.constants = Constants()
 
         print("[DATAMODULE] Reading dataframes WORLDMODEL ACTION_DF")
@@ -219,13 +209,8 @@ class DataModule(pl.LightningDataModule):
             action_eval_df = normalize(action_eval_df)
 
         indexes = np.array([i for i in range(dropped_action_df.shape[0])])
-        if self.stratify:
-            stratification_clusters = self.clusterization(action_eval_df)
-            train_split, test_split = train_test_split(indexes, test_size=0.3, random_state=199, stratify=stratification_clusters)
-            test_split, val_split = train_test_split(test_split, test_size=0.5, random_state=199, stratify=stratification_clusters[test_split])
-        else:
-            train_split, test_split = train_test_split(indexes, test_size=0.3, random_state=199)
-            test_split, val_split = train_test_split(test_split, test_size=0.5, random_state=199)
+        train_split, test_split = train_test_split(indexes, test_size=0.3, random_state=199)
+        test_split, val_split = train_test_split(test_split, test_size=0.5, random_state=199)
 
         world_model_train = merged_world_model_df[train_split]
         world_model_test = merged_world_model_df[test_split]
@@ -335,13 +320,6 @@ class DataModule(pl.LightningDataModule):
             clusters=cluster_test,
         )
 
-    def drop_clusters(self, arr: np.array, mask: np.array):
-        return arr[mask.squeeze(-1)]
-        
-    def clusterization(self, arr:np.array):
-        kmeans = KMeans(n_clusters=self.cluster_size)
-        return kmeans.fit_predict(arr)
-    
     def train_dataloader(self) -> DataLoader:
         '''
         Defines the train_dataloader get method, used by the pl.Trainer.fit function.

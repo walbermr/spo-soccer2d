@@ -17,9 +17,10 @@ coverage.xml
 preprocessing/reduced_dataset
 
 # results files
-db
 db.zip
-models
+db/
+models/
+training_logs/
 plots/*
 outputs/*
 .vscode/*

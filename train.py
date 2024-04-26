@@ -39,8 +39,6 @@ def main():
         normalize_evaluation=hparams["dataset"]["normalize_evaluation"],
         batch_size=100, 
         feature_set=hparams["dataset"]["fset"],
-        oversampling_method=hparams["dataset"]["oversampling_method"],       # options: None, "kmeans_random"
-        stratify=hparams["dataset"]["stratify"],
     )
     
     pass_model = SPO(

@@ -183,12 +183,17 @@ class CyrusModel(nn.Module):
         super().__init__()
         
         self.backbone = nn.Sequential(
-            nn.Linear(780, 128),
-            nn.LeakyReLU(inplace=True),
-            nn.Linear(128, 64),
-            nn.LeakyReLU(inplace=True),
+            nn.Linear(780, 1024),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.1),
+            nn.Linear(1024, 512),
+            nn.ReLU(inplace=True),
+            nn.Linear(512, 256),
+            nn.ReLU(inplace=True),
+            nn.Linear(256, 64),
+            nn.ReLU(inplace=True),
             nn.Linear(64, 32),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
             nn.Linear(32, output_size),
             nn.Softmax(dim=1)
         )
