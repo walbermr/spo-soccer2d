@@ -3,7 +3,7 @@
 <h1 style="text-align: center;">RobôCIn2D - SPO</h1>
 
 
-Single Pass Optimization genearting MLP model for single-step target point generation for passing in Soccer Simulation 2D.
+Single Pass Optimization creates MLP models for single-step target point generation for passing in Soccer Simulation 2D.
 
 Requirements:
 
