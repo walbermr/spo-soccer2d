@@ -45,9 +45,11 @@ class TargetPointGenerator(nn.Module):
     net : nn.Sequential
         MLP model.
     '''
-    def __init__(self, input_size, output_size, bps_ckpt_path="./models/bps_model.ckpt") -> None:
+    def __init__(self, sFset, normalize_dset, input_size, output_size, bps_ckpt_path="./bps_model.ckpt",) -> None:
         super().__init__()
         self.constants = Constants("cuda:0")
+        self.sFset = sFset
+        self.normalize_dset = normalize_dset
 
         self.bps_model = CyrusPassClassifier.load_from_checkpoint(
             bps_ckpt_path,
@@ -91,7 +93,7 @@ class TargetPointGenerator(nn.Module):
             tm_cartesian_pos /= self.constants.pos_norm_factor
             return wm, tm_cartesian_pos.reshape(bs, 2)
 
-    def forward(self, x:torch.Tensor, raw_wm:torch.Tensor=None, bps_input:torch.Tensor=None, return_bps=False) -> torch.Tensor:
+    def forward(self, action_row:torch.Tensor=None, raw_wm:torch.Tensor=None, bps_input:torch.Tensor=None, return_bps=False) -> torch.Tensor:
         '''
             Model's forward function.
 
@@ -103,10 +105,17 @@ class TargetPointGenerator(nn.Module):
             Returns:
                 Tensor containing the labeled result.
         '''
+        #Adding colums to remove after in the get_featureset Function
+        zeros_col = np.zeros((action_row.shape[0], 1))
+        action_row = np.insert(action_row, 0, zeros_col, axis=1)
+        action_row = np.insert(action_row, 0, zeros_col, axis=1)
 
         bps_idx = torch.argmax(self.bps_model(bps_input), axis=1)
-
+        x, _ = get_featureset(self.constants, raw_wm, action_row, normalize=self.normalize_dset, fset_fn=self.sFset)
+        
         generator_input, bps_pos = self.get_generator_input(x, raw_wm, bps_idx)
+        # Ensure generator_input has the same dtype as the network's parameters
+        generator_input = generator_input.to(dtype=next(self.net.parameters()).dtype)
 
         delta = self.net(generator_input)
         target_point = (bps_pos + delta).float()
@@ -202,10 +211,14 @@ class SPO(pl.LightningModule):
 
         self.save_hyperparameters()
 
+        self.get_feature_set = fset_dict[self.feature_set_function]
+
         self.generator = TargetPointGenerator(
-            hparams["generator"]["input_size"], 
-            hparams["generator"]["output_size"], 
-            hparams["generator"]["bps_ckpt_path"],
+            sFset = self.get_feature_set,
+            normalize_dset=hparams["dataset"]["normalize_dset"],
+            input_size=hparams["generator"]["input_size"],
+            output_size=hparams["generator"]["output_size"],
+            bps_ckpt_path=hparams["generator"]["bps_ckpt_path"],
         )
 
         self.evaluator = PassEvaluator(
@@ -214,7 +227,6 @@ class SPO(pl.LightningModule):
             norm_layer=self.hparams.norm_layer,
         )
 
-        self.get_feature_set = fset_dict[self.feature_set_function]
         self.evaluator_loss = nn.MSELoss()
         self.evaluator_val_loss = nn.MSELoss()
 
@@ -250,8 +262,7 @@ class SPO(pl.LightningModule):
     
     def _generator_train_step(self, optimizer_idx, wm, raw_wm, bps_row, true_action, action_eval, action_risk):
         bs = wm.shape[0]
-
-        self.generated_action, best_player_pos = self.generator(wm, raw_wm, bps_row, return_bps=True)
+        self.generated_action, best_player_pos = self.generator(true_action, raw_wm, bps_row, return_bps=True)
 
         evaluator_input = self.get_feature_set(
             self.constants, 
@@ -338,7 +349,7 @@ class SPO(pl.LightningModule):
         net_evaluation = self.evaluator(evaluator_input)
         evaluator_loss = self.evaluator_val_loss(net_evaluation, action_eval)
             
-        generated_action = self.generator(wm, raw_wm, bps_row)
+        generated_action = self.generator(true_action, raw_wm, bps_row)
         fake_input = self.get_feature_set(
             self.constants, 
             raw_wm, 
@@ -450,7 +461,7 @@ class SPO(pl.LightningModule):
 
         net_evaluation = net_evaluation.squeeze(1)
         action_eval = action_eval.squeeze(1)
-        generated_action = self.generator(wm, raw_wm, bps_row)
+        generated_action = self.generator(true_action, raw_wm, bps_row)
         fake_input = self.get_feature_set(
             self.constants, 
             raw_wm, 
